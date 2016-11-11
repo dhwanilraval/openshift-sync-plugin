@@ -27,6 +27,7 @@ import hudson.model.Run;
 import hudson.model.TaskListener;
 import hudson.model.listeners.RunListener;
 import hudson.triggers.SafeTimerTask;
+import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.openshift.api.model.Build;
 import jenkins.util.Timer;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
@@ -247,18 +248,25 @@ public class BuildSyncRunListener extends RunListener<Run> {
     }
 
     logger.info("Patching build in namespace " + cause.getNamespace() + " with name: " + cause.getName() + " phase: " + phase);
-    getOpenShiftClient().builds().inNamespace(cause.getNamespace()).withName(cause.getName()).edit()
-      .editMetadata()
-        .addToAnnotations(ANNOTATION_JENKINS_STATUS_JSON, json)
-        .addToAnnotations(ANNOTATION_JENKINS_BUILD_URI, buildUrl)
-        .addToAnnotations(ANNOTATION_JENKINS_LOG_URL, logsUrl)
-      .endMetadata()
-      .editStatus()
-        .withPhase(phase)
-        .withStartTimestamp(startTime)
-        .withCompletionTimestamp(completionTime)
-      .endStatus()
-    .done();
+    try {
+      getOpenShiftClient().builds().inNamespace(cause.getNamespace()).withName(cause.getName()).edit()
+        .editMetadata()
+          .addToAnnotations(ANNOTATION_JENKINS_STATUS_JSON, json)
+          .addToAnnotations(ANNOTATION_JENKINS_BUILD_URI, buildUrl)
+          .addToAnnotations(ANNOTATION_JENKINS_LOG_URL, logsUrl)
+        .endMetadata()
+        .editStatus()
+          .withPhase(phase)
+          .withStartTimestamp(startTime)
+          .withCompletionTimestamp(completionTime)
+        .endStatus()
+      .done();
+    } catch (KubernetesClientException e) {
+      if (e.getCode() == 404)
+        logger.info("Patching build failed with 404");
+      else
+        throw e;
+    }
   }
 
   private long getStartTime(Run run) {

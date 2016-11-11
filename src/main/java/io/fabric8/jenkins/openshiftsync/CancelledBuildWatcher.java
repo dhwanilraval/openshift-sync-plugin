@@ -17,11 +17,14 @@ package io.fabric8.jenkins.openshiftsync;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.model.Job;
+import hudson.security.ACL;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.kubernetes.client.Watch;
 import io.fabric8.kubernetes.client.Watcher;
 import io.fabric8.openshift.api.model.Build;
 import io.fabric8.openshift.api.model.BuildList;
+import jenkins.model.Jenkins;
+import jenkins.security.NotReallyRoleSensitiveCallable;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -29,6 +32,7 @@ import java.util.logging.Logger;
 import static io.fabric8.jenkins.openshiftsync.BuildPhases.NEW;
 import static io.fabric8.jenkins.openshiftsync.BuildPhases.RUNNING;
 import static io.fabric8.jenkins.openshiftsync.JenkinsUtils.getJobFromBuild;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.cancelOpenShiftBuild;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getOpenShiftClient;
 import static java.net.HttpURLConnection.HTTP_GONE;
 
@@ -79,6 +83,9 @@ public class CancelledBuildWatcher implements Watcher<Build> {
         case MODIFIED:
           buildModified(build);
           break;
+        case DELETED:
+          buildDeleted(build);
+          break;
       }
     } catch (Exception e) {
       logger.log(Level.WARNING, "Caught: " + e, e);
@@ -91,8 +98,21 @@ public class CancelledBuildWatcher implements Watcher<Build> {
       Job job = getJobFromBuild(build);
       if (job != null) {
         JenkinsUtils.cancelBuild(job, build);
+        cancelOpenShiftBuild(build);
       }
     }
   }
 
+  private void buildDeleted(final Build build) throws Exception {
+    final Job job = getJobFromBuild(build);
+    if (job != null) {
+      ACL.impersonate(ACL.SYSTEM, new NotReallyRoleSensitiveCallable<Void, Exception>() {
+        @Override
+        public Void call() throws Exception {
+          JenkinsUtils.cancelBuild(job, build);
+          return null;
+        }
+      });
+    }
+  }
 }

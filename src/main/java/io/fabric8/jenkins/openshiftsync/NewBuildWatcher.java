@@ -151,7 +151,6 @@ public class NewBuildWatcher implements Watcher<Build> {
 
   public static synchronized void buildAdded(Build build) throws IOException {
     if (build.getStatus() != null && Boolean.TRUE.equals(build.getStatus().getCancelled())) {
-      cancelOpenShiftBuild(build);
       return;
     }
 

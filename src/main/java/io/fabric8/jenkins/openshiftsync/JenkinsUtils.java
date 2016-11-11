@@ -116,7 +116,6 @@ public class JenkinsUtils {
     if (!cancelledQueuedBuild) {
       cancelRunningBuild(job, build);
     }
-    cancelOpenShiftBuild(build);
   }
 
   private static boolean cancelRunningBuild(Job job, Build build) {
